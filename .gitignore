@@ -1,0 +1,26 @@
+# Secrets
+.env
+.env.*
+
+# Caller data: never in git (docs/compliance/data-handling.md)
+data/raw/
+data/calls/
+transcripts/
+*.wav
+*.mp3
+*.m4a
+*.ogg
+*.flac
+*.webm
+
+# Personal Claude settings
+CLAUDE.local.md
+.claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+.DS_Store
