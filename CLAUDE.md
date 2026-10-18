@@ -1,5 +1,7 @@
 # guava_saul
 
+> **Current focus: hackathon demo, Scenario A.** Build only what `docs/demo/scenario-a.md` lists. The tier/playbook model in `docs/` is the post-hackathon design and does not constrain the demo.
+
 Voice agent for legal help. A caller phones in, and a Guava voice agent runs a structured intake to understand their situation. It then works in tiers (ADR 0001): **0** escalate safety issues, **1** give sourced legal information, **2** resolve basic cases using attorney-approved playbooks, **3** hand off to legal counsel. The goal is to help the caller, and resolve what's safe to resolve. Failure modes here hurt real people, so safety rules outrank features.
 
 > Shared file. Everyone edits it through PRs. Keep it under ~2.5k tokens. If it bloats, rewrite it; don't append. Personal preferences go in `CLAUDE.local.md` (gitignored).
