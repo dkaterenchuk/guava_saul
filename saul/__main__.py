@@ -31,10 +31,20 @@ def main() -> int:
     group.add_argument("--local", action="store_true", help="Call using the local mic and speakers.")
     group.add_argument("--phone", metavar="NUMBER", nargs="?", const="", help="Listen on a phone number.")
     group.add_argument("--roleplay", metavar="SCENARIO", help="Run a roleplay scenario, or 'all'.")
+    parser.add_argument(
+        "--dashboard", metavar="PORT", nargs="?", const=8765, type=int,
+        help="Also serve the operator console (live turn-by-turn transcript) on this port. Default 8765.",
+    )
     args = parser.parse_args()
 
     from .agent import agent
     from .llm import _claude_available, model_id
+
+    if args.dashboard:
+        from . import dashboard
+
+        url = dashboard.start(port=args.dashboard)
+        print(f"\n  Operator console: {url}\n", flush=True)
 
     logging.getLogger("saul").info(
         "advice LLM: %s", f"claude ({model_id()})" if _claude_available() else "guava server LLM (no ANTHROPIC_API_KEY)"

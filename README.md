@@ -16,4 +16,5 @@ guava login                 # once
 .venv/bin/python -m saul --chat        # text
 .venv/bin/python -m saul --webrtc      # browser voice
 .venv/bin/python -m saul --roleplay all
+.venv/bin/python -m saul --phone --dashboard   # + live operator console at http://127.0.0.1:8765
 ```

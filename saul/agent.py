@@ -22,6 +22,7 @@ from guava.events import AgentSpeechEvent, BotSessionEnded, CallerSpeechEvent, E
 from . import prompts, safety
 from .advice import Advice, advice_chunks, advice_notes
 from .case_file import CaseFile, intake_fields
+from .dashboard import bus, mask_number
 from .llm import answer_question, generate_advice
 
 logger = logging.getLogger("saul.agent")
@@ -45,6 +46,17 @@ def _phase(call: guava.Call) -> str:
 def _set_phase(call: guava.Call, phase: str) -> None:
     logger.info("phase -> %s", phase)
     call.set_variable("phase", phase)
+    bus.emit(call.id, "phase", phase=phase)
+
+
+def _call_label(call: guava.Call) -> str:
+    info = call.call_info
+    kind = getattr(info, "call_type", "call")
+    if kind == "pstn":
+        return f"phone {mask_number(getattr(info, 'from_number', None))}"
+    if kind == "webrtc":
+        return "browser"
+    return kind
 
 
 def _case(call: guava.Call) -> CaseFile | None:
@@ -68,6 +80,7 @@ def on_call_received(call_info: guava.CallInfo) -> guava.IncomingCallAction:
 
 @agent.on_call_start
 def on_call_start(call: guava.Call) -> None:
+    bus.emit(call.id, "call_start", label=_call_label(call))
     # S1: AI + recording disclosure and the demo disclaimer, verbatim, before any LLM turn.
     call.read_script(prompts.DISCLOSURE_SCRIPT)
     _start_intake(call)
@@ -87,6 +100,7 @@ def on_intake_done(call: guava.Call) -> None:
     call.set_variable("case", case.to_dict())
     logger.info("intake complete; empty fields: %s", case.missing() or "none")
     _debug_dump("case", case.to_dict())
+    bus.emit(call.id, "case", case=case.to_dict())
     _start_confirm(call, case)
 
 
@@ -126,6 +140,7 @@ def on_confirm_done(call: guava.Call) -> None:
         if correction:
             case.corrections.append(correction)
             call.set_variable("case", case.to_dict())
+            bus.emit(call.id, "case", case=case.to_dict())
         if attempts >= 2:
             # Still unsure of key facts after a correction: that's a lawyer conversation, not guidance.
             call.send_instruction("Tell the caller you want a person to go over the details with them rather than guess.")
@@ -148,6 +163,7 @@ def _deliver_advice(call: guava.Call, case: CaseFile) -> None:
     call.set_variable("advice", advice.model_dump())
     call.set_variable("advice_provider", provider)
     call.add_info("advice_notes", advice_notes(advice))
+    bus.emit(call.id, "advice", advice=advice.model_dump(), provider=provider)
 
     _set_phase(call, "advice")
     checklist: list = []
@@ -192,11 +208,14 @@ def _wrap(call: guava.Call) -> None:
 @agent.on_caller_speech
 def on_caller_speech(call: guava.Call, event: CallerSpeechEvent) -> None:
     utterance = event.utterance or ""
+    # Live transcript for the operator console (in memory only). Same utterance_id = same turn, refined.
+    bus.emit(call.id, "caller", id=f"c-{event.utterance_id}" if event.utterance_id else None, text=utterance)
     signal = safety.scan(utterance)
     if signal is None:
         # C4: "get me a person" is handled in code, not left to the hosted model's judgment.
         if safety.wants_human(utterance) and _phase(call) not in {"handoff", "safety", "wrap"}:
             logger.info("caller asked for a human")
+            bus.emit(call.id, "note", text="caller asked for a person; starting callback flow")
             _start_handoff(call)
         return
     if _phase(call) == "safety":
@@ -207,6 +226,7 @@ def on_caller_speech(call: guava.Call, event: CallerSpeechEvent) -> None:
     call.set_variable("safety_handled", sorted(handled))
     call.set_variable("resume_phase", _phase(call))
     logger.warning("safety signal: %s", signal.category)
+    bus.emit(call.id, "safety", category=signal.category)
     _start_safety(call, signal)
 
 
@@ -284,14 +304,29 @@ def on_question(call: guava.Call, question: str) -> str:
     advice = _advice(call)
     if case is None or advice is None:
         return prompts.HOLD_THAT_THOUGHT
-    return answer_question(case, advice, question)
+    answer = answer_question(case, advice, question)
+    bus.emit(call.id, "note", text=f"question routed to LLM: {question[:80]}")
+    return answer
 
 
 @agent.on_agent_speech
 def on_agent_speech(call: guava.Call, event: AgentSpeechEvent) -> None:
+    bus.emit(call.id, "agent", text=event.utterance or "", interrupted=bool(event.interrupted))
     if event.interrupted:
         call.set_variable("last_interrupted", event.utterance)
         logger.info("caller interrupted the agent")
+    _emit_partial_case(call)
+
+
+def _emit_partial_case(call: guava.Call) -> None:
+    """Push the fields collected so far to the console, so they tick off live during intake."""
+    if _phase(call) != "intake":
+        return
+    partial = CaseFile.from_call(call).to_dict()
+    filled = {k: v for k, v in partial.items() if v and k != "corrections"}
+    if filled and filled != call.get_variable("partial_case_sent"):
+        call.set_variable("partial_case_sent", filled)
+        bus.emit(call.id, "case", case=partial)
 
 
 @agent.on_action_request
@@ -350,6 +385,7 @@ def on_session_end(call: guava.Call, event: BotSessionEnded) -> None:
         "session ended: phase=%s reason=%s advice_provider=%s safety=%s",
         _phase(call), event.termination_reason, call.get_variable("advice_provider"), call.get_variable("safety_handled", []),
     )
+    bus.emit(call.id, "call_end", reason=str(event.termination_reason))
     _debug_dump("session", {"case": case.to_dict() if case else None, "top3": advice.top3 if advice else None})
 
 

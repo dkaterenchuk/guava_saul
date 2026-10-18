@@ -19,6 +19,16 @@ Pick a scenario below (A is the main demo) and say the lines in the "You say" co
 
 Tip: start with `SAUL_DEBUG_SYNTHETIC=1 .venv/bin/python -m saul --phone +14842951424` to see the full case file and advice JSON in the terminal during your own test call.
 
+## Operator console (live dashboard)
+
+Add `--dashboard` to any mode and open http://127.0.0.1:8765 in a browser:
+
+```bash
+.venv/bin/python -m saul --phone +14842951424 --dashboard
+```
+
+It shows, live and turn by turn: the transcript (caller and Saul, with interruptions marked), the current phase, a timer, the case file filling in field by field, a safety banner if a danger signal fires, the generated guidance (top 3, do, don't, options), and an event log. Past calls from the same run are in the dropdown. Everything is in memory only and disappears when the process stops.
+
 ## Setup (once)
 
 ```bash
