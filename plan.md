@@ -20,6 +20,8 @@ Guava platform ──── STT ────▶  SaulController (guava.CallContr
 
 Guava owns the audio path: telephony or WebRTC, speech-to-text, text-to-speech, and interruption detection. We write the controller that decides what to say next.
 
+> **Update after verifying the SDK (2026-10-17):** Guava's hosted dialog model also does the *talking*. We don't call an LLM per turn. Instead our code sets a task per phase (`call.set_task` with `Field`/`Say`/instruction items), and Guava asks the questions, fills the fields, and fires `on_task_complete` when every required field has a value. That is the deterministic "story complete" check. Claude is called twice at most: once to generate the advice JSON, and on `on_question` for follow-ups the hosted model can't answer from the `add_info` notes. Safety scanning runs in code on every `on_caller_speech`. See `docs/integrations/guava.md` and `saul/agent.py`.
+
 ### What we know about the Guava SDK (verify in step 1 of the build order)
 
 - Install: `pip install guava-sdk` (Python 3.10+).

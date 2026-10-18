@@ -20,3 +20,14 @@ Official docs: https://goguava.ai (confirm the docs URL and the Python SDK repo)
 
 ## Verified
 <!-- - <fact> — <link> — verified YYYY-MM-DD by <name> -->
+
+## Verified (guava-sdk 0.48.0, read from the installed package and the starter repo, 2026-10-17, Jayesh)
+- Use `guava.Agent` + `guava.Call`. `guava.CallController` is marked deprecated in the SDK source.
+- Guava's hosted dialog model does STT, TTS, turn-taking, barge-in, and the actual talking. Our code shapes it with `call.set_task(task_id, objective, checklist=[Field|Say|str])`, `call.send_instruction()`, `call.add_info(label, data)`, `call.read_script()` (verbatim, before any LLM turn), `call.hangup(final_instructions)`, `call.transfer(destination, instructions)`.
+- A task completes when every required `Field` has a value; `@agent.on_task_complete("task_id")` fires. This makes "intake complete" deterministic.
+- Hooks: `on_call_received`, `on_call_start`, `on_caller_speech` (incremental transcripts sharing `utterance_id`), `on_agent_speech` (`interrupted: bool`), `on_question`, `on_action_request` / `on_action(key)`, `on_escalate`, `on_session_end`.
+- Auth: `GUAVA_API_KEY`, else a deploy token, else the CLI session from `guava login` (`~/Library/Application Support/guava/config.json` on macOS).
+- Testing without a phone: `agent.chat()` (terminal), `agent.listen_webrtc()` (browser link), `agent.call_local()` (mic), `agent.roleplay(prompt)` + `session.evaluate(pass_criteria, fail_criteria)`, `agent.test()` for scripted sessions. Source: `guava/examples/agent_testing.py`.
+- Server-side LLM with JSON schema output: `guava.helpers.llm.generate(prompt, json_schema=...)`. Uses the same auth. No OpenAI key needed.
+- `IntentRecognizer` in `guava.helpers.openai` needs an OpenAI key; `guava.helpers.llm` has a server-backed variant.
+- Not found in the SDK: per-utterance ASR confidence. Confirm critical slots by read-back.
